@@ -1,0 +1,90 @@
+---
+# tasks file for /home/andrew/ansible/roles/mosquitto
+- name: Install epel-release
+  dnf: 
+    state: latest
+    update_cache: true
+    name:
+    - epel-release
+    #- mosquito
+    #- certbot
+
+- name: Install mosquitto, certbot and docker
+  dnf: 
+    state: latest
+    update_cache: true
+    name:
+    - mosquitto
+    - certbot
+    - docker
+  
+
+
+# - name: ensure required pip-packages are installed
+#   pip:
+#     name: 
+#       - docker-compose
+
+- name: Replace mosquitto config file
+  template:
+    src: files/mosquitto.conf.j2
+    dest: /etc/mosquitto/mosquitto.conf
+    owner: mosquitto
+    group: mosquitto
+    mode: 0644
+
+
+- name: Create mosquitto user
+  become: true
+  ansible.builtin.shell: | 
+    touch  /etc/mosquitto/passwd && \
+    mosquitto_passwd \
+    -b /etc/mosquitto/passwd {{ mosquitto_user }} {{ mosquitto_pass }}
+
+- name: copy certificates, change cert permissions and restart mosquitto
+  become: true
+  ansible.builtin.shell: |
+    mkdir /etc/mosquitto/certs/ 
+    cp /etc/letsencrypt/live/{{ fqdn }}/* /etc/mosquitto/certs
+    chown mosquitto:mosquitto /etc/mosquitto/certs/ -R
+    chmod 0600 /etc/mosquitto/certs/privkey.pem
+    killall -HUP mosquitto
+
+- name: allow port 1883
+  ansible.builtin.include_role:
+    name: firewall
+  vars:
+    port: 1883
+
+- name: allow port 8883
+  ansible.builtin.include_role:
+    name: firewall
+  vars:
+    port: 8883
+
+
+
+- name: Run mosquitto exporter
+  containers.podman.podman_container:
+    name: mosquitto_exporter
+    state: started
+    network: host
+    #image: docker.io/sapcc/mosquitto-exporter:latest
+    image: docker.io/kpetrem/mqtt-exporter
+    # command: mosquitto_exporter --user {{ mosquitto_user }} --pass {{ mosquitto_pass }} 
+    ports:
+     - "9000:9000"
+    env:
+      MQTT_ADDRESS: localhost
+      MQTT_USERNAME: "{{ mosquitto_user }}"
+      MQTT_PASSWORD: "{{ mosquitto_pass }}"
+      MQTT_CLIENT_ID: "{{ mosquitto_user }}_mosquitto_exporter"
+      MQTT_TOPIC: "$SYS/broker/messages/received"
+
+
+
+- name: allow port 9000
+  ansible.builtin.include_role:
+    name: firewall
+  vars:
+    port: 9000

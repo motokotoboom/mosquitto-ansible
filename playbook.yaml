@@ -1,0 +1,14 @@
+---
+- name: install mosquitto
+  hosts: mosquitto_servers
+  become: true
+  roles:
+    - mosquitto
+
+- name: install certbot
+  hosts: mosquitto_servers
+  become: true
+  roles:
+    - certbot
+  vars:
+    fqdn:

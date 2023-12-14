@@ -1,0 +1,22 @@
+---
+# tasks file for /home/andrew/ansible/roles/certbot
+- name: install certbot
+  dnf:
+    state: latest
+    name:
+    - certbot
+- name: allow port 80
+  ansible.builtin.include_role:
+    name: firewall
+  vars:
+    port: 80
+- name: Create a challenge for {{ fqdn }} using a account key from a variable.
+  become: true
+  ansible.builtin.shell: |
+    certbot \
+    certonly \
+    --standalone \
+    -d {{ fqdn }} \
+    --non-interactive \
+    --agree-tos \
+    -m {{ acme_email }}
